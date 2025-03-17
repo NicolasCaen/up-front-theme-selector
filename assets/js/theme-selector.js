@@ -11,6 +11,7 @@ jQuery(document).ready(function($) {
     var toggleButton = $('#theme-selector-toggle');
     var popup = $('#theme-selector-popup');
     var closeButton = $('#theme-selector-close');
+    var colorPickers = $('.theme-color-picker');
     
     // Fonctions pour gérer le stockage des sélections
     function saveSelection(key, value) {
@@ -123,6 +124,14 @@ jQuery(document).ready(function($) {
                         });
                         fontsContainer.show();
                     }
+                    
+                    // Mettre à jour les couleurs du thème si disponibles
+                    if (data.colors) {
+                        $.each(data.colors, function(colorType, colorValue) {
+                            $('#color-' + colorType).wpColorPicker('color', colorValue);
+                            saveSelection('color_' + colorType, colorValue);
+                        });
+                    }
                 } else {
                     themePreview.html('<div class="error-message">Erreur: ' + response.data + '</div>');
                 }
@@ -155,12 +164,68 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // Initialiser les color pickers
+    colorPickers.wpColorPicker({
+        change: function(event, ui) {
+            // Sauvegarder la couleur sélectionnée
+            var colorType = $(this).attr('id').replace('color-', '');
+            saveSelection('color_' + colorType, ui.color.toString());
+        }
+    });
+    
+    // Gestionnaire d'événement pour les couleurs
+    $('#theme-colors-container').on('change', '.wp-color-picker', function() {
+        // Mettre à jour l'aperçu en temps réel (optionnel)
+        updateColorPreview();
+    });
+    
+    // Fonction pour mettre à jour l'aperçu des couleurs
+    function updateColorPreview() {
+        var primaryColor = $('#color-primary').val();
+        var secondaryColor = $('#color-secondary').val();
+        var backgroundColor = $('#color-background').val();
+        var textColor = $('#color-text').val();
+        
+        // Supprimer l'ancien style d'aperçu
+        $('#temp-color-preview').remove();
+        
+        // Créer un nouveau style d'aperçu
+        var previewStyle = '<style id="temp-color-preview">';
+        if (primaryColor) {
+            previewStyle += 'a, .wp-block-button__link, button:not(.theme-selector-close), .button, .wp-element-button { color: ' + primaryColor + ' !important; }\n';
+            previewStyle += '.wp-block-button__link, button:not(.theme-selector-close), .button, .wp-element-button { background-color: ' + primaryColor + ' !important; }\n';
+        }
+        if (secondaryColor) {
+            previewStyle += 'a:hover, a:focus { color: ' + secondaryColor + ' !important; }\n';
+        }
+        if (backgroundColor) {
+            previewStyle += 'body, .site, .wp-site-blocks { background-color: ' + backgroundColor + ' !important; }\n';
+        }
+        if (textColor) {
+            previewStyle += 'body, .site, .wp-site-blocks { color: ' + textColor + ' !important; }\n';
+        }
+        previewStyle += '</style>';
+        
+        $('head').append(previewStyle);
+    }
+    
     // Restaurer les sélections précédentes
     var savedTheme = getSelection('theme', '');
     if (savedTheme) {
         // Sélectionner le thème sauvegardé
         themeSelect.val(savedTheme);
     }
+    
+    // Restaurer les couleurs sauvegardées
+    var savedPrimaryColor = getSelection('color_primary', '');
+    var savedSecondaryColor = getSelection('color_secondary', '');
+    var savedBackgroundColor = getSelection('color_background', '');
+    var savedTextColor = getSelection('color_text', '');
+    
+    if (savedPrimaryColor) $('#color-primary').wpColorPicker('color', savedPrimaryColor);
+    if (savedSecondaryColor) $('#color-secondary').wpColorPicker('color', savedSecondaryColor);
+    if (savedBackgroundColor) $('#color-background').wpColorPicker('color', savedBackgroundColor);
+    if (savedTextColor) $('#color-text').wpColorPicker('color', savedTextColor);
     
     // Charger les informations du thème actuel au chargement initial
     if (themeSelect.val()) {

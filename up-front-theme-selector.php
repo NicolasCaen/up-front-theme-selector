@@ -26,6 +26,10 @@ class Theme_Selector {
         // AJAX pour charger les styles d'un thème
         add_action('wp_ajax_get_theme_styles', array($this, 'ajax_get_theme_styles'));
         add_action('wp_ajax_nopriv_get_theme_styles', array($this, 'ajax_get_theme_styles'));
+        
+        // AJAX pour sauvegarder les couleurs
+        add_action('wp_ajax_save_theme_colors', array($this, 'ajax_save_theme_colors'));
+        add_action('wp_ajax_nopriv_save_theme_colors', array($this, 'ajax_save_theme_colors'));
 
         // Hook pour traiter le formulaire soumis
         add_action('template_redirect', array($this, 'process_theme_form'));
@@ -130,6 +134,30 @@ class Theme_Selector {
                             </select>
                         </div>
                     </div>
+                    
+                    <div id="theme-colors-container" class="theme-selector-colors">
+                        <h4><?php _e('Personnaliser les couleurs', 'theme-selector'); ?></h4>
+                        
+                        <div class="theme-selector-field">
+                            <label for="color-primary"><?php _e('Couleur principale :', 'theme-selector'); ?></label>
+                            <input type="text" name="color_primary" id="color-primary" class="theme-color-picker" value="<?php echo esc_attr($this->get_theme_color('primary')); ?>" data-default-color="#0073aa" />
+                        </div>
+                        
+                        <div class="theme-selector-field">
+                            <label for="color-secondary"><?php _e('Couleur secondaire :', 'theme-selector'); ?></label>
+                            <input type="text" name="color_secondary" id="color-secondary" class="theme-color-picker" value="<?php echo esc_attr($this->get_theme_color('secondary')); ?>" data-default-color="#005177" />
+                        </div>
+                        
+                        <div class="theme-selector-field">
+                            <label for="color-background"><?php _e('Couleur d\'arrière-plan :', 'theme-selector'); ?></label>
+                            <input type="text" name="color_background" id="color-background" class="theme-color-picker" value="<?php echo esc_attr($this->get_theme_color('background')); ?>" data-default-color="#ffffff" />
+                        </div>
+                        
+                        <div class="theme-selector-field">
+                            <label for="color-text"><?php _e('Couleur du texte :', 'theme-selector'); ?></label>
+                            <input type="text" name="color_text" id="color-text" class="theme-color-picker" value="<?php echo esc_attr($this->get_theme_color('text')); ?>" data-default-color="#333333" />
+                        </div>
+                    </div>
 
                     <div class="theme-selector-preview" id="theme-preview">
                         <!-- Aperçu du thème ici -->
@@ -174,13 +202,92 @@ class Theme_Selector {
         if (!$theme->exists()) {
             wp_send_json_error(__('Ce thème n\'existe pas.', 'theme-selector'));
         }
-
+        
         $response = array(
             'styles' => array(),
             'fonts' => array(),
+            'colors' => array(),
             'hasStyles' => false,
             'hasFonts' => false,
         );
+        
+        // Récupérer les styles du thème
+        if ($this->theme_has_styles($theme_slug)) {
+            $styles = $this->get_theme_styles($theme_slug);
+            if (!empty($styles)) {
+                $response['hasStyles'] = true;
+                $response['styles'] = $styles;
+            }
+        }
+
+        // Récupérer les polices du thème
+        $fonts = $this->get_theme_fonts($theme_slug);
+        if (!empty($fonts)) {
+            $response['hasFonts'] = true;
+            $response['fonts'] = $fonts;
+        }
+        
+        // Récupérer les couleurs du thème
+        $response['colors'] = array(
+            'primary' => $this->get_theme_color('primary'),
+            'secondary' => $this->get_theme_color('secondary'),
+            'background' => $this->get_theme_color('background'),
+            'text' => $this->get_theme_color('text')
+        );
+
+        // Informations sur le thème
+        $response['theme'] = array(
+            'name' => $theme->get('Name'),
+            'description' => $theme->get('Description'),
+            'screenshot' => $theme->get_screenshot() ? $theme->get_screenshot() : '',
+        );
+
+        wp_send_json_success($response);
+    }
+    
+    /**
+     * AJAX pour sauvegarder les couleurs du thème
+     */
+    public function ajax_save_theme_colors() {
+        check_ajax_referer('theme_selector_nonce', 'nonce');
+        
+        $theme_slug = isset($_POST['theme']) ? sanitize_text_field($_POST['theme']) : '';
+        if (empty($theme_slug)) {
+            wp_send_json_error(__('Aucun thème spécifié.', 'theme-selector'));
+        }
+        
+        // Vérifier si le thème existe
+        $theme = wp_get_theme($theme_slug);
+        if (!$theme->exists()) {
+            wp_send_json_error(__('Ce thème n\'existe pas.', 'theme-selector'));
+        }
+        
+        // Récupérer les couleurs
+        $colors = array();
+        if (isset($_POST['primary'])) {
+            $colors['primary'] = sanitize_hex_color($_POST['primary']);
+        }
+        if (isset($_POST['secondary'])) {
+            $colors['secondary'] = sanitize_hex_color($_POST['secondary']);
+        }
+        if (isset($_POST['background'])) {
+            $colors['background'] = sanitize_hex_color($_POST['background']);
+        }
+        if (isset($_POST['text'])) {
+            $colors['text'] = sanitize_hex_color($_POST['text']);
+        }
+        
+        if (empty($colors)) {
+            wp_send_json_error(__('Aucune couleur fournie.', 'theme-selector'));
+        }
+        
+        // Appliquer les couleurs
+        $this->apply_colors($theme_slug, $colors);
+        
+        wp_send_json_success(array(
+            'message' => __('Couleurs sauvegardées avec succès.', 'theme-selector'),
+            'colors' => $colors
+        ));
 
         // Récupérer les styles du thème
         if ($this->theme_has_styles($theme_slug)) {
@@ -197,6 +304,14 @@ class Theme_Selector {
             $response['hasFonts'] = true;
             $response['fonts'] = $fonts;
         }
+        
+        // Récupérer les couleurs du thème
+        $response['colors'] = array(
+            'primary' => $this->get_theme_color('primary'),
+            'secondary' => $this->get_theme_color('secondary'),
+            'background' => $this->get_theme_color('background'),
+            'text' => $this->get_theme_color('text')
+        );
 
         // Informations sur le thème
         $response['theme'] = array(
@@ -223,6 +338,21 @@ class Theme_Selector {
         $theme_slug = isset($_POST['selected_theme']) ? sanitize_text_field($_POST['selected_theme']) : '';
         $style_id = isset($_POST['selected_style']) ? sanitize_text_field($_POST['selected_style']) : '';
         $font_id = isset($_POST['selected_font']) ? sanitize_text_field($_POST['selected_font']) : '';
+        
+        // Récupérer les couleurs
+        $colors = array();
+        if (isset($_POST['color_primary'])) {
+            $colors['primary'] = sanitize_hex_color($_POST['color_primary']);
+        }
+        if (isset($_POST['color_secondary'])) {
+            $colors['secondary'] = sanitize_hex_color($_POST['color_secondary']);
+        }
+        if (isset($_POST['color_background'])) {
+            $colors['background'] = sanitize_hex_color($_POST['color_background']);
+        }
+        if (isset($_POST['color_text'])) {
+            $colors['text'] = sanitize_hex_color($_POST['color_text']);
+        }
 
         if (empty($theme_slug)) {
             return;
@@ -247,6 +377,11 @@ class Theme_Selector {
             setcookie('ts_font', $font_id, time() + 30 * DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN);
         } else {
             setcookie('ts_font', '', time() - 3600, COOKIEPATH, COOKIE_DOMAIN); // Supprimer le cookie
+        }
+        
+        // Appliquer les couleurs si elles sont définies
+        if (!empty($colors)) {
+            $this->apply_colors($theme_slug, $colors);
         }
 
         // Si l'utilisateur est administrateur, on peut changer le thème
@@ -600,6 +735,76 @@ class Theme_Selector {
             $css .= 'h1, h2, h3, h4, h5, h6 { color: ' . esc_attr($variation['elements']['heading']['color']['text']) . ' !important; }';
         }
 
+        return $css;
+    }
+    
+    /**
+     * Récupérer la couleur du thème
+     */
+    private function get_theme_color($color_type) {
+        $colors = get_option('theme_selector_colors', array());
+        $defaults = array(
+            'primary' => '#0073aa',
+            'secondary' => '#005177',
+            'background' => '#ffffff',
+            'text' => '#333333'
+        );
+        
+        if (isset($colors[$color_type])) {
+            return $colors[$color_type];
+        }
+        
+        return isset($defaults[$color_type]) ? $defaults[$color_type] : '';
+    }
+    
+    /**
+     * Appliquer les couleurs au thème
+     */
+    private function apply_colors($theme_slug, $colors) {
+        // Sauvegarder les couleurs dans les options
+        update_option('theme_selector_colors', $colors);
+        
+        // Générer le CSS personnalisé
+        $custom_css = $this->generate_custom_css($colors);
+        
+        // Sauvegarder le CSS personnalisé
+        update_option('theme_selector_custom_css', $custom_css);
+        
+        // Ajouter le CSS personnalisé au thème actif
+        if (function_exists('wp_update_custom_css_post')) {
+            // Pour WordPress 4.7+
+            $css = wp_get_custom_css();
+            $css .= "\n/* Couleurs personnalisées par le sélecteur de thème */\n";
+            $css .= $custom_css;
+            wp_update_custom_css_post($css);
+        }
+    }
+    
+    /**
+     * Générer le CSS personnalisé à partir des couleurs
+     */
+    private function generate_custom_css($colors) {
+        $css = "\n/* CSS généré par le sélecteur de thème */\n";
+        
+        if (isset($colors['primary'])) {
+            $css .= "\n:root { --primary-color: {$colors['primary']}; }\n";
+            $css .= "a, .wp-block-button__link, button:not(.theme-selector-close), .button, .wp-element-button { color: {$colors['primary']}; }\n";
+            $css .= ".wp-block-button__link, button:not(.theme-selector-close), .button, .wp-element-button { background-color: {$colors['primary']}; }\n";
+        }
+        
+        if (isset($colors['secondary'])) {
+            $css .= "\n:root { --secondary-color: {$colors['secondary']}; }\n";
+            $css .= "a:hover, a:focus { color: {$colors['secondary']}; }\n";
+        }
+        
+        if (isset($colors['background'])) {
+            $css .= "\nbody, .site, .wp-site-blocks { background-color: {$colors['background']}; }\n";
+        }
+        
+        if (isset($colors['text'])) {
+            $css .= "\nbody, .site, .wp-site-blocks { color: {$colors['text']}; }\n";
+        }
+        
         return $css;
     }
 }
