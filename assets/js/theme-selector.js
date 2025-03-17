@@ -8,10 +8,61 @@ jQuery(document).ready(function($) {
     var stylesContainer = $('#theme-styles-container');
     var fontsContainer = $('#theme-fonts-container');
     var themePreview = $('#theme-preview');
+    var toggleButton = $('#theme-selector-toggle');
+    var popup = $('#theme-selector-popup');
+    var closeButton = $('#theme-selector-close');
+    
+    // Fonctions pour gérer le stockage des sélections
+    function saveSelection(key, value) {
+        try {
+            localStorage.setItem('theme_selector_' + key, value);
+        } catch (e) {
+            console.error('Erreur lors de la sauvegarde de la sélection:', e);
+        }
+    }
+    
+    function getSelection(key, defaultValue) {
+        try {
+            var value = localStorage.getItem('theme_selector_' + key);
+            return value !== null ? value : defaultValue;
+        } catch (e) {
+            console.error('Erreur lors de la récupération de la sélection:', e);
+            return defaultValue;
+        }
+    }
+    
+    // Gestion de l'ouverture/fermeture de la popup
+    toggleButton.on('click', function() {
+        popup.addClass('active');
+        // Sauvegarder l'état de la popup
+        saveSelection('popup_open', 'true');
+    });
+    
+    closeButton.on('click', function() {
+        popup.removeClass('active');
+        // Sauvegarder l'état de la popup
+        saveSelection('popup_open', 'false');
+    });
+    
+    // Fermer la popup en cliquant en dehors (optionnel)
+    $(document).on('click', function(event) {
+        if (!$(event.target).closest('#theme-selector-popup, #theme-selector-toggle').length) {
+            popup.removeClass('active');
+            saveSelection('popup_open', 'false');
+        }
+    });
+    
+    // Rétablir l'état de la popup au chargement
+    if (getSelection('popup_open', 'false') === 'true') {
+        popup.addClass('active');
+    }
 
     // Quand un thème est sélectionné
     themeSelect.on('change', function() {
         var themeSlug = $(this).val();
+        
+        // Sauvegarder la sélection du thème
+        saveSelection('theme', themeSlug);
 
         // Réinitialiser les autres sélecteurs
         styleSelect.html('<option value="">' + themeSelectorData.defaultStyleText + '</option>');
@@ -55,16 +106,20 @@ jQuery(document).ready(function($) {
 
                     // Ajouter les styles si disponibles
                     if (data.hasStyles && data.styles.length > 0) {
+                        var savedStyle = getSelection('style', '');
                         $.each(data.styles, function(index, style) {
-                            styleSelect.append('<option value="' + style.id + '">' + style.label + '</option>');
+                            var selected = (savedStyle === style.id) ? ' selected' : '';
+                            styleSelect.append('<option value="' + style.id + '"' + selected + '>' + style.label + '</option>');
                         });
                         stylesContainer.show();
                     }
 
                     // Ajouter les polices si disponibles
                     if (data.hasFonts && Object.keys(data.fonts).length > 0) {
+                        var savedFont = getSelection('font', '');
                         $.each(data.fonts, function(slug, font) {
-                            fontSelect.append('<option value="' + font.id + '">' + font.label + '</option>');
+                            var selected = (savedFont === font.id) ? ' selected' : '';
+                            fontSelect.append('<option value="' + font.id + '"' + selected + '>' + font.label + '</option>');
                         });
                         fontsContainer.show();
                     }
@@ -80,12 +135,18 @@ jQuery(document).ready(function($) {
 
     // Aperçu en temps réel des styles (optionnel)
     styleSelect.on('change', function() {
+        // Sauvegarder la sélection du style
+        saveSelection('style', $(this).val());
+        
         // Vous pourriez implémenter un aperçu en direct ici
         // Par exemple, en appliquant temporairement des styles CSS
     });
 
     // Aperçu en temps réel des polices (optionnel)
     fontSelect.on('change', function() {
+        // Sauvegarder la sélection de la police
+        saveSelection('font', $(this).val());
+        
         var fontFamily = $(this).find('option:selected').data('family');
         if (fontFamily) {
             $('head').append('<style id="temp-font-preview">body { font-family: ' + fontFamily + ' !important; }</style>');
@@ -94,6 +155,13 @@ jQuery(document).ready(function($) {
         }
     });
 
+    // Restaurer les sélections précédentes
+    var savedTheme = getSelection('theme', '');
+    if (savedTheme) {
+        // Sélectionner le thème sauvegardé
+        themeSelect.val(savedTheme);
+    }
+    
     // Charger les informations du thème actuel au chargement initial
     if (themeSelect.val()) {
         themeSelect.trigger('change');

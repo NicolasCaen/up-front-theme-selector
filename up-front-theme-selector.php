@@ -39,9 +39,13 @@ class Theme_Selector {
      */
     public function enqueue_scripts() {
         wp_enqueue_style(
+            'dashicons'
+        );
+        
+        wp_enqueue_style(
             'theme-selector-css',
             plugin_dir_url(__FILE__) . 'assets/css/theme-selector.css',
-            array(),
+            array('dashicons'),
             '1.0.0'
         );
 
@@ -59,79 +63,99 @@ class Theme_Selector {
             array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce'   => wp_create_nonce('theme_selector_nonce'),
+                'defaultStyleText' => __('-- Style par défaut --', 'theme-selector'),
+                'defaultFontText' => __('-- Police par défaut --', 'theme-selector')
             )
         );
+        
+        // Ajouter l'icône flottante et la popup seulement si on n'est pas dans l'admin
+        if (!is_admin()) {
+            add_action('wp_footer', array($this, 'add_theme_selector_button'));
+        }
+    }
+    
+    /**
+     * Ajouter le bouton flottant et la popup dans le footer
+     */
+    public function add_theme_selector_button() {
+        // Récupérer les données pour le sélecteur
+        $themes = wp_get_themes();
+        $current_theme = wp_get_theme();
+        
+        // Afficher le bouton flottant et la popup
+        ?>
+        <div id="theme-selector-toggle" class="theme-selector-toggle">
+            <span class="dashicons dashicons-admin-appearance"></span>
+        </div>
+        
+        <div id="theme-selector-popup" class="theme-selector-popup">
+            <div class="theme-selector-popup-header">
+                <h3><?php _e('Sélecteur de thème', 'theme-selector'); ?></h3>
+                <button id="theme-selector-close" class="theme-selector-close">
+                    <span class="dashicons dashicons-no-alt"></span>
+                </button>
+            </div>
+            <div class="theme-selector-popup-content">
+                <form method="post" action="" id="theme-selector-form">
+                    <?php wp_nonce_field('theme_selector_action', 'theme_selector_nonce'); ?>
+
+                    <div class="theme-selector-field">
+                        <label for="theme-select"><?php _e('Choisir un thème :', 'theme-selector'); ?></label>
+                        <select name="selected_theme" id="theme-select">
+                            <option value=""><?php _e('-- Sélectionner un thème --', 'theme-selector'); ?></option>
+                            <?php foreach ($themes as $theme_slug => $theme) : ?>
+                                <option value="<?php echo esc_attr($theme_slug); ?>" <?php selected($theme_slug, $current_theme->get_stylesheet()); ?>>
+                                    <?php echo esc_html($theme->get('Name')); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div id="theme-styles-container" style="display: none;">
+                        <div class="theme-selector-field">
+                            <label for="style-select"><?php _e('Choisir un style :', 'theme-selector'); ?></label>
+                            <select name="selected_style" id="style-select">
+                                <option value=""><?php _e('-- Style par défaut --', 'theme-selector'); ?></option>
+                                <!-- Les options de style seront chargées ici par AJAX -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="theme-fonts-container" style="display: none;">
+                        <div class="theme-selector-field">
+                            <label for="font-select"><?php _e('Choisir une police :', 'theme-selector'); ?></label>
+                            <select name="selected_font" id="font-select">
+                                <option value=""><?php _e('-- Police par défaut --', 'theme-selector'); ?></option>
+                                <!-- Les options de police seront chargées ici par AJAX -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="theme-selector-preview" id="theme-preview">
+                        <!-- Aperçu du thème ici -->
+                    </div>
+
+                    <div class="theme-selector-submit">
+                        <button type="submit" name="apply_theme" class="button button-primary">
+                            <?php _e('Appliquer', 'theme-selector'); ?>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php
     }
 
     /**
      * Shortcode pour afficher le sélecteur de thème
+     * Note: Ce shortcode est maintenant obsolète car le sélecteur est affiché via un bouton flottant
+     * mais on le garde pour la compatibilité avec le code existant
      */
     public function theme_selector_shortcode($atts) {
-        $atts = shortcode_atts(
-            array(
-                'title' => __('Sélecteur de thème', 'theme-selector'),
-            ),
-            $atts,
-            'theme_selector'
-        );
-
-        $themes = wp_get_themes();
-        $current_theme = wp_get_theme();
-
-        // Démarrer le buffer de sortie
-        ob_start();
-        ?>
-        <div class="theme-selector-container">
-            <h3><?php echo esc_html($atts['title']); ?></h3>
-
-            <form method="post" action="" id="theme-selector-form">
-                <?php wp_nonce_field('theme_selector_action', 'theme_selector_nonce'); ?>
-
-                <div class="theme-selector-field">
-                    <label for="theme-select"><?php _e('Choisir un thème :', 'theme-selector'); ?></label>
-                    <select name="selected_theme" id="theme-select">
-                        <option value=""><?php _e('-- Sélectionner un thème --', 'theme-selector'); ?></option>
-                        <?php foreach ($themes as $theme_slug => $theme) : ?>
-                            <option value="<?php echo esc_attr($theme_slug); ?>" <?php selected($theme_slug, $current_theme->get_stylesheet()); ?>>
-                                <?php echo esc_html($theme->get('Name')); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div id="theme-styles-container" style="display: none;">
-                    <div class="theme-selector-field">
-                        <label for="style-select"><?php _e('Choisir un style :', 'theme-selector'); ?></label>
-                        <select name="selected_style" id="style-select">
-                            <option value=""><?php _e('-- Style par défaut --', 'theme-selector'); ?></option>
-                            <!-- Les options de style seront chargées ici par AJAX -->
-                        </select>
-                    </div>
-                </div>
-
-                <div id="theme-fonts-container" style="display: none;">
-                    <div class="theme-selector-field">
-                        <label for="font-select"><?php _e('Choisir une police :', 'theme-selector'); ?></label>
-                        <select name="selected_font" id="font-select">
-                            <option value=""><?php _e('-- Police par défaut --', 'theme-selector'); ?></option>
-                            <!-- Les options de police seront chargées ici par AJAX -->
-                        </select>
-                    </div>
-                </div>
-
-                <div class="theme-selector-preview" id="theme-preview">
-                    <!-- Aperçu du thème ici -->
-                </div>
-
-                <div class="theme-selector-submit">
-                    <button type="submit" name="apply_theme" class="button button-primary">
-                        <?php _e('Appliquer', 'theme-selector'); ?>
-                    </button>
-                </div>
-            </form>
-        </div>
-        <?php
-        return ob_get_clean();
+        // Ce shortcode ne fait plus rien car le sélecteur est maintenant affiché via un bouton flottant
+        return '<div class="theme-selector-notice">' . 
+               __('Le sélecteur de thème est maintenant accessible via un bouton flottant sur le côté de la page.', 'theme-selector') . 
+               '</div>';
     }
 
     /**
@@ -367,8 +391,8 @@ class Theme_Selector {
         $styles = array();
         $theme = wp_get_theme($theme_slug);
 
-        // Pour les thèmes FSE
-        if (function_exists('wp_get_global_styles_variations')) {
+        // Pour les thèmes FSE avec WordPress 5.9+
+        if (function_exists('wp_get_global_styles_variations') && version_compare(get_bloginfo('version'), '5.9', '>=')) {
             $current_theme = wp_get_theme();
 
             // Temporairement changer de thème pour récupérer les variations
